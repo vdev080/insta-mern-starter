@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./styles.css";
 
-const API = "http://localhost:5000/api/auth";
+const API = `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/auth`;
 
 export default function App() {
   const [mode, setMode] = useState("signup");
@@ -114,7 +114,7 @@ if (user) {
           {user.profilePicture ? (
             <img
               className="profile-avatar"
-              src={`http://localhost:5000${user.profilePicture}`}
+              src={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}${user.profilePicture}`}
               alt="Profile"
             />
           ) : (
