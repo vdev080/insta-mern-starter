@@ -2,26 +2,40 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import path from "path";
-import { randomUUID } from "crypto";
+import cloudinary from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 import User from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, "uploads/"),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${randomUUID()}${ext}`);
-  }
+const cloudinaryV2 = cloudinary.v2;
+
+cloudinaryV2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinaryV2,
+  params: {
+    folder: "instaclone",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+  },
+});
+
 const upload = multer({
   storage,
   limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp"];
-    cb(allowed.includes(file.mimetype) ? null : new Error("Use a JPG, PNG, or WebP image."), allowed.includes(file.mimetype));
-  }
+    cb(
+      allowed.includes(file.mimetype)
+        ? null
+        : new Error("Use a JPG, PNG, or WebP image."),
+      allowed.includes(file.mimetype)
+    );
+  },
 });
 
 function setSessionCookie(res, userId) {
@@ -59,7 +73,7 @@ router.post("/signup", upload.single("profilePicture"), async (req, res, next) =
     if (existing) return res.status(409).json({ message: "That username or email is already registered." });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const profilePicture = req.file ? `/uploads/${req.file.filename}` : "";
+    const profilePicture = req.file ? req.file.path : "";
     const user = await User.create({
       firstName: firstName.trim(),
       lastName: lastName.trim(),

@@ -114,7 +114,7 @@ if (user) {
           {user.profilePicture ? (
             <img
               className="profile-avatar"
-              src={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}${user.profilePicture}`}
+              src={user.profilePicture}
               alt="Profile"
             />
           ) : (
