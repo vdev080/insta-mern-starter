@@ -115,11 +115,14 @@ router.get("/me", requireAuth, async (req, res, next) => {
 });
 
 router.post("/logout", (_req, res) => {
+  const isProduction = process.env.NODE_ENV === "production";
+
   res.clearCookie("token", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax"
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax"
   });
+
   res.json({ message: "Signed out." });
 });
 
