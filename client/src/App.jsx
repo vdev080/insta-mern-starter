@@ -33,6 +33,9 @@ export default function App() {
   const [feed, setFeed] = useState([]);
   const [myPosts, setMyPosts] = useState([]);
   const [myPostCount, setMyPostCount] = useState(0);
+  const [activePage, setActivePage] = useState("home");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const request = useCallback(async (url, options = {}) => {
     const response = await fetch(url, { ...options, credentials: "include" });
@@ -54,7 +57,7 @@ export default function App() {
   useEffect(() => {
     request(`${AUTH_API}/me`)
       .then((data) => setUser(data.user))
-      .catch(() => {});
+      .catch(() => { });
   }, [request]);
 
   useEffect(() => {
@@ -102,48 +105,76 @@ export default function App() {
   }
 
   async function loadComments(postId) {
-  try {
-    const data = await request(`${POSTS_API}/${postId}/comments`);
+    try {
+      const data = await request(`${POSTS_API}/${postId}/comments`);
 
-    setComments((prev) => ({
-      ...prev,
-      [postId]: data.comments,
-    }));
-  } catch (error) {
-    setError(true);
-    setNotice(error.message);
+      setComments((prev) => ({
+        ...prev,
+        [postId]: data.comments,
+      }));
+    } catch (error) {
+      setError(true);
+      setNotice(error.message);
+    }
   }
-}
-async function submitComment(postId) {
-  const text = commentInputs[postId]?.trim();
+  async function submitComment(postId) {
+    const text = commentInputs[postId]?.trim();
 
-  if (!text) return;
+    if (!text) return;
 
-  try {
-    const data = await request(`${POSTS_API}/${postId}/comments`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text }),
-    });
+    try {
+      const data = await request(`${POSTS_API}/${postId}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
 
-    setComments((prev) => ({
-      ...prev,
-      [postId]: [...(prev[postId] || []), data.comment],
-    }));
+      setComments((prev) => ({
+        ...prev,
+        [postId]: [...(prev[postId] || []), data.comment],
+      }));
 
-    setCommentInputs((prev) => ({
-      ...prev,
-      [postId]: "",
-    }));
-  } catch (error) {
-    setError(error.message);
+      setCommentInputs((prev) => ({
+        ...prev,
+        [postId]: "",
+      }));
+    } catch (error) {
+      setError(error.message);
+    }
   }
-}
+
+
+  async function updateProfile(e) {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+
+    setSavingProfile(true);
+    setNotice("");
+    setError(false);
+
+    try {
+      const data = await request(`${AUTH_API}/profile`, {
+        method: "PATCH",
+        body: formData,
+      });
+
+      setUser(data.user);
+      setEditingProfile(false);
+      setNotice(data.message || "Profile updated successfully.");
+    } catch (err) {
+      setError(true);
+      setNotice(err.message);
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
 
   async function logout() {
-    try { await request(`${AUTH_API}/logout`, { method: "POST" }); } catch {}
+    try { await request(`${AUTH_API}/logout`, { method: "POST" }); } catch { }
     setUser(null);
     setFeed([]);
     setMyPosts([]);
@@ -192,17 +223,17 @@ async function submitComment(postId) {
     }
   }
   function toggleComments(postId) {
-  const isExpanded = expandedComments[postId];
+    const isExpanded = expandedComments[postId];
 
-  setExpandedComments((prev) => ({
-    ...prev,
-    [postId]: !prev[postId],
-  }));
+    setExpandedComments((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
 
-  if (!isExpanded && comments[postId] === undefined) {
-    loadComments(postId);
+    if (!isExpanded && comments[postId] === undefined) {
+      loadComments(postId);
+    }
   }
-}
 
   if (user) {
     return (
@@ -211,11 +242,25 @@ async function submitComment(postId) {
           <a className="brand" href="#home" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>InstaClone</a>
           <div className="header-actions">
             <span className="header-user">@{user.username}</span>
-            <button className="logout-btn" onClick={logout} type="button">Logout</button>
+
+            <button
+              type="button"
+              className="account-nav-btn"
+              onClick={() => {
+                setActivePage("account");
+                setNotice("");
+              }}
+            >
+              My Account
+            </button>
+
+            <button className="logout-btn" onClick={logout} type="button">
+              Logout
+            </button>
           </div>
         </header>
 
-        <div className="content-layout">
+        <div className="content-layout" hidden={activePage !== "home"}>
           <aside className="profile-card">
             <Avatar user={user} className="profile-avatar" />
             <h2>{user.firstName} {user.lastName}</h2>
@@ -307,6 +352,147 @@ async function submitComment(postId) {
             })}
           </section>
         </div>
+
+        {activePage === "account" && (
+          <section className="account-page">
+            <div className="account-heading">
+              <button
+                type="button"
+                onClick={() => setActivePage("home")}
+              >
+                ← Home Feed
+              </button>
+              <h1>My Account</h1>
+            </div>
+
+            <div className="account-card">
+              <div className="account-profile-header">
+                <Avatar user={user} className="account-avatar" />
+
+                <div>
+                  <h2>{user.firstName} {user.lastName}</h2>
+                  <p>@{user.username}</p>
+                  <strong>{myPostCount} Posts</strong>
+                </div>
+              </div>
+
+              {editingProfile ? (
+                <form className="account-edit-form" onSubmit={updateProfile}>
+                  <h3>Edit Profile</h3>
+
+                  <label>Profile picture</label>
+                  <input
+                    type="file"
+                    name="profilePicture"
+                    accept="image/jpeg,image/png,image/webp"
+                  />
+
+                  <label>First name</label>
+                  <input
+                    name="firstName"
+                    defaultValue={user.firstName}
+                    required
+                  />
+
+                  <label>Last name</label>
+                  <input
+                    name="lastName"
+                    defaultValue={user.lastName}
+                    required
+                  />
+
+                  <label>Username</label>
+                  <input
+                    name="username"
+                    defaultValue={user.username}
+                    minLength={3}
+                    maxLength={24}
+                    pattern="[A-Za-z0-9._]+"
+                    required
+                  />
+
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    defaultValue={user.email}
+                    required
+                  />
+
+                  <label>Date of birth</label>
+                  <input
+                    type="date"
+                    name="dateOfBirth"
+                    defaultValue={
+                      user.dateOfBirth
+                        ? new Date(user.dateOfBirth).toISOString().slice(0, 10)
+                        : ""
+                    }
+                    required
+                  />
+
+                  <div className="account-form-actions">
+                    <button type="submit" disabled={savingProfile}>
+                      {savingProfile ? "Saving..." : "Save Changes"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingProfile(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="account-details">
+                  <h3>Personal Information</h3>
+
+                  <p><strong>First name:</strong> {user.firstName}</p>
+                  <p><strong>Last name:</strong> {user.lastName}</p>
+                  <p><strong>Username:</strong> @{user.username}</p>
+                  <p><strong>Email:</strong> {user.email}</p>
+                  <p>
+                    <strong>Date of birth:</strong>{" "}
+                    {user.dateOfBirth
+                      ? new Date(user.dateOfBirth).toLocaleDateString()
+                      : "Not available"}
+                  </p>
+
+                  <button
+                    type="button"
+                    className="edit-profile-btn"
+                    onClick={() => setEditingProfile(true)}
+                  >
+                    Edit Profile
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="account-posts">
+              <h2>My Posts</h2>
+
+              <div className="account-posts-grid">
+                {myPosts.map((post) => (
+                  <a
+                    href={post.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    key={post._id}
+                  >
+                    <img src={post.imageUrl} alt="My post" />
+                  </a>
+                ))}
+
+                {myPosts.length === 0 && (
+                  <p>You haven't uploaded any images yet.</p>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
       </main>
     );
   }

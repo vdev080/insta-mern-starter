@@ -114,6 +114,101 @@ router.get("/me", requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+
+router.patch(
+  "/profile",
+  requireAuth,
+  upload.single("profilePicture"),
+  async (req, res, next) => {
+    try {
+      const { firstName, lastName, username, email, dateOfBirth } = req.body;
+
+      const user = await User.findById(req.userId);
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found." });
+      }
+
+      // Validate required profile fields
+      if (
+        ![firstName, lastName, username, email, dateOfBirth].every(
+          (value) => typeof value === "string" && value.trim()
+        )
+      ) {
+        return res.status(400).json({
+          message: "Please complete all profile fields.",
+        });
+      }
+
+      const cleanUsername = username.trim().toLowerCase();
+      const cleanEmail = email.trim().toLowerCase();
+
+      if (!/^[a-z0-9._]{3,24}$/.test(cleanUsername)) {
+        return res.status(400).json({
+          message: "Username must be 3–24 characters.",
+        });
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({
+          message: "Enter a valid email address.",
+        });
+      }
+
+      const dob = new Date(dateOfBirth);
+
+      if (Number.isNaN(dob.getTime()) || dob >= new Date()) {
+        return res.status(400).json({
+          message: "Enter a valid date of birth.",
+        });
+      }
+
+      // Check whether username or email belongs to another account
+      const existing = await User.findOne({
+        _id: { $ne: user._id },
+        $or: [
+          { username: cleanUsername },
+          { email: cleanEmail },
+        ],
+      });
+
+      if (existing) {
+        return res.status(409).json({
+          message: "Username or email is already in use.",
+        });
+      }
+
+      // Update profile information
+      user.firstName = firstName.trim();
+      user.lastName = lastName.trim();
+      user.username = cleanUsername;
+      user.email = cleanEmail;
+      user.dateOfBirth = dob;
+
+      // Update profile picture only when a new image is uploaded
+      if (req.file) {
+        user.profilePicture = req.file.path;
+      }
+
+      await user.save();
+
+      res.json({
+        message: "Profile updated successfully.",
+        user,
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(409).json({
+          message: "Username or email is already in use.",
+        });
+      }
+
+      next(err);
+    }
+  }
+);
+
+
 router.post("/logout", (_req, res) => {
   const isProduction = process.env.NODE_ENV === "production";
 
